@@ -1,6 +1,8 @@
 #include "clientmanager.h"
 #include <string.h>
 
+// 현재 문제 있는 코드 수정예정... 귀찬아
+
 void init_clients(ClientManager *manager) {
     memset(manager, 0, sizeof(ClientManager));
 }
