@@ -1,4 +1,3 @@
-// client.c
 #include "clientmanager.h"
 #include <string.h>
 
