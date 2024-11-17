@@ -1,4 +1,5 @@
 #include "init_server.h"
+#include "clientmanager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,108 +9,100 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-int client_fds[MAX_CLIENTS];  // 클라이언트 파일 기술자 배열
-int num_clients = 0;          // 현재 클라이언트 수
-
-// 클라이언트 파일 기술자 추가
-void add_client(int client_fd) {
-    if (num_clients < MAX_CLIENTS) {
-        client_fds[num_clients++] = client_fd;
-    }
-}
-
-// 클라이언트 파일 기술자 제거
-void remove_client(int client_fd) {
-    for (int i = 0; i < num_clients; i++) {
-        if (client_fds[i] == client_fd) {
-            client_fds[i] = client_fds[--num_clients];
-            break;
-        }
-    }
-}
 
 // 새로운 클라이언트를 ACCPET 하는 함수
-int accept_new_cleint(int server_fd, int epoll_fd, struct epoll_event *event)
+int accept_new_client(int server_socket, int epoll_fd, struct epoll_event *event)
 {
     // 새로운 클라이언트 연결 수락
     struct sockaddr_in client_addr;
     int client_addr_len = sizeof(client_addr);
-    int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_len);
-    if (client_fd == -1) {
+    int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+    if (client_socket == -1) {
         perror("accept failed");
         return -1;
     }
 
     // 클라이언트를 non-blocking 모드로 설정
-    if (set_nonblocking(client_fd) == -1) {
-        close(client_fd);
+    if (set_nonblocking(client_socket) == -1) {
+        close(client_socket);
         return -1;
     }
 
     // 새 클라이언트를 epoll 이벤트에 추가
     event->events = EPOLLIN | EPOLLET;
-    event->data.fd = client_fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, event) == -1) {
+    event->data.fd = client_socket;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, event) == -1) {
         perror("epoll_ctl: client_fd");
-        close(client_fd);
+        close(client_socket);
         return -1;
     }
 
-    printf("Accepted new client: %d\n", client_fd);
-    return client_fd;       
+    printf("Accepted new client: %d\n", client_socket);
+    return client_socket;       
 }   
 
-int main() {
 
-    int server_fd = init_server();
-    int epoll_fd;
-    if(server_fd == -1)
+int main() {
+    
+    ClientManager clientmanager;
+    init_clients(&clientmanager);
+    
+    int server_socket = init_server();
+    if(server_socket == -1)
     {
         perror("Failed Server Init");
         exit(EXIT_FAILURE);
     }
     
-    printf("server_fd : %d\n", server_fd);
+    //printf("server_socket : %d\n", server_socket);
 
+    int epoll_fd;
     // epoll 인스턴스 생성
     epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
         perror("epoll_create1 failed");
-        close(server_fd);
+        close(server_socket);
         exit(EXIT_FAILURE);
     }
 
     // 서버 소켓을 epoll 이벤트에 추가
     struct epoll_event event;
     event.events = EPOLLIN;
-    event.data.fd = server_fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event) == -1) {
-        perror("epoll_ctl: server_fd");
-        close(server_fd);
+    event.data.fd = server_socket;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_socket, &event) == -1) {
+        perror("epoll_ctl: server_socket");
+        close(server_socket);
         close(epoll_fd);
         exit(EXIT_FAILURE);
     }
 
     // epoll_wait가 감지한 이벤트들을 저장하기 위한 배열
     struct epoll_event events[MAX_EVENTS];
-    printf("Success Init Server!\nServer is listening on port %d\n", PORT);
 
     // epoll을 통해 이벤트 감지 및 처리
     while (1) {
         int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         if (num_events == -1) {
             perror("epoll_wait failed");
-            break;
+            continue;
         }
 
         for (int i = 0; i < num_events; i++) {
-            if (events[i].data.fd == server_fd) {
+            if (events[i].data.fd == server_socket) 
+            {
 
                 // 새로운 클라이언트 연결 수락
-                int client_fd = accept_new_cleint(server_fd, epoll_fd, &event);
-                add_client(client_fd);
-            } 
-            else {
+                int client_socket = accept_new_client(server_socket, epoll_fd, &event);
+                if(client_socket > 0) {
+                    add_client(&clientmanager, client_socket);
+                }
+                else {
+                    perror("Client Accpet Error");
+                }
+                
+            }
+            else 
+            {
                 // 기존 클라이언트로부터 데이터 수신
                 int client_fd = events[i].data.fd;
                 char buffer[BUFFER_SIZE];
@@ -142,7 +135,7 @@ int main() {
     }
 
     // 리소스 해제
-    close(server_fd);
+    close(server_socket);
     close(epoll_fd);
     return 0;
 }

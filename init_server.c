@@ -1,4 +1,5 @@
 #include "init_server.h"
+#include "clientmanager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,7 @@ int set_nonblocking(int fd) {
     return 0;
 }
 
+// 서버 초기 설정을 진행한다음 서버 소켓을 반환하는 함수
 int init_server()
 {
     int server_fd;
@@ -63,6 +65,8 @@ int init_server()
         close(server_fd);
         return -1;
     }
+
+    printf("Success Init Server!\nServer is listening on port %d\n", PORT);
 
     return server_fd;
 }
