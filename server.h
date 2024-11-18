@@ -3,7 +3,7 @@
 
 #include <sys/epoll.h>
 
-#define PORT 8080           // 서버 포트
+#define PORT 30001           // 서버 포트
 #define MAX_EVENTS 1024     // epoll 최대 이벤트 수
 #define BUFFER_SIZE 1024    // 클라이언트와의 메시지 버퍼 크기
 

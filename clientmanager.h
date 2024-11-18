@@ -1,27 +1,23 @@
 #ifndef CLIENTMANAGER_H
 #define CLIENTMANAGER_H
 
+#include <pthread.h>
 
-#define MAX_CLIENTS 1024 // 최대 클라이언트 수 정의
-#define BUFFER_SIZE 1024 // 버퍼 사이즈
-#define PORT 8080 // 포트 번호
+#define MAX_CLIENTS 1024 // 최대 클라이언트 수
 
-// 클라이언트 관리 구조체
 typedef struct {
-    int sockets[MAX_CLIENTS]; 
-    int count;                
+    int client_sockets[MAX_CLIENTS]; // 클라이언트 소켓 배열
+    int num_clients;                // 현재 연결된 클라이언트 수
+    pthread_mutex_t lock;           // 동기화를 위한 뮤텍스
 } ClientManager;
 
-// 클라이언트 관리 초기화 함수
-// 클라이언트 관리 구조체를 초기화합니다.
-void init_clients(ClientManager *manager);
+// 클라이언트 매니저 초기화 함수
+void init_clients(ClientManager *cm);
 
-// 클라이언트 추가 함수
-// 클라이언트를 배열에 추가하며, 최대 클라이언트 수를 초과하면 추가되지 않습니다.
-void add_client(ClientManager *manager, int client_fd);
+// 새로운 클라이언트 추가 함수
+void add_client(ClientManager *cm, int client_socket);
 
 // 클라이언트 제거 함수
-// 특정 클라이언트를 배열에서 제거합니다.
-void remove_client(ClientManager *manager, int client_fd);
+void remove_client(ClientManager *cm, int client_socket);
 
 #endif // CLIENTMANAGER_H

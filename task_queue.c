@@ -4,34 +4,41 @@
 
 // 작업 큐 초기화
 void init_task_queue(TaskQueue *queue) {
-    queue->front = queue->rear = 0;              
-    pthread_mutex_init(&queue->lock, NULL);         
-    pthread_cond_init(&queue->cond, NULL);          
+    queue->front = queue->rear = 0;
+    pthread_mutex_init(&queue->lock, NULL);
+    pthread_cond_init(&queue->cond, NULL);
 }
 
 // 작업을 큐에 추가
 void push_task(TaskQueue *queue, Task task) {
-    pthread_mutex_lock(&queue->lock);              
+    pthread_mutex_lock(&queue->lock);
 
-    queue->tasks[queue->rear] = task;              
-    queue->rear = (queue->rear + 1) % QUEUE_SIZE;   
+    // 큐가 가득 찬 경우 처리
+    if ((queue->rear + 1) % QUEUE_SIZE == queue->front) {
+        fprintf(stderr, "Task queue is full! Dropping task.\n");
+        pthread_mutex_unlock(&queue->lock);
+        return;
+    }
 
-    pthread_cond_signal(&queue->cond);              // 대기 중인 스레드에 작업 추가 신호 전달
-    pthread_mutex_unlock(&queue->lock);             
+    queue->tasks[queue->rear] = task;                 // 작업 추가
+    queue->rear = (queue->rear + 1) % QUEUE_SIZE;     // rear 포인터 이동
+
+    pthread_cond_signal(&queue->cond);               // 대기 중인 스레드에 신호
+    pthread_mutex_unlock(&queue->lock);
 }
 
 // 큐에서 작업을 가져오기
 Task pop_task(TaskQueue *queue) {
-    pthread_mutex_lock(&queue->lock);               
+    pthread_mutex_lock(&queue->lock);
 
-    // 큐가 비어 있으면 작업이 추가될 때까지 대기
-    while (queue->front == queue->rear) {           
-        pthread_cond_wait(&queue->cond, &queue->lock); 
+    // 큐가 비어 있는 경우 대기
+    while (queue->front == queue->rear) {
+        pthread_cond_wait(&queue->cond, &queue->lock);
     }
 
-    Task task = queue->tasks[queue->front];         
-    queue->front = (queue->front + 1) % QUEUE_SIZE; 
+    Task task = queue->tasks[queue->front];           // 작업 가져오기
+    queue->front = (queue->front + 1) % QUEUE_SIZE;   // front 포인터 이동
 
-    pthread_mutex_unlock(&queue->lock);            
-    return task;                                   
+    pthread_mutex_unlock(&queue->lock);
+    return task;
 }

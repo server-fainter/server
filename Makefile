@@ -1,7 +1,7 @@
 # 컴파일러 및 플래그
 CC = gcc
-CFLAGS = -I. -Wall -Wextra -g
-LDFLAGS = -pthread
+CFLAGS = -I. -I/usr/local/include -Wall -Wextra -g
+LDFLAGS = -pthread -L/usr/local/lib -lcjson
 
 # 디렉토리 설정
 SRCDIR = .
