@@ -14,16 +14,19 @@ static void *worker_thread(void *arg) {
     TaskQueue *queue = &ctx->queue;
 
     while (1) {
-        Task task = pop_task(queue); // 작업 큐에서 작업 가져오기
+        Task task = pop_task(queue); 
 
         switch (task.type) {
-        case 0: // 클라이언트 연결 수락
+            
+        case TASK_NEW_CLIENT:
             accept_new_client(&ctx->sm);
             break;
-        case 1: // 클라이언트 요청 처리
-            printf("Received data: %s\n", task.data); // 데이터 출력
+
+        case TASK_TEST_RECV_MESSAGE:
+            printf("Received data: %s\n", task.data);
             break;
-        case 2: { // 캔버스 업데이트
+
+        case TASK_PIXEL_UPDATE: 
             cJSON *json = cJSON_Parse(task.data);
             if (json) {
                 cJSON *x = cJSON_GetObjectItem(json, "x");
@@ -39,7 +42,23 @@ static void *worker_thread(void *arg) {
                 cJSON_Delete(json);
             }
             break;
-        }
+
+        case TASK_SEND_STATIC_FILE:
+            /*
+            1. 클라이언트가 새로 접속했을 경우
+            2. 요청 받은 HTML, CSS, JS, 전체 캔버스 정보가 담긴 JSON 파일 SEND
+            */
+            break;
+
+        case TASK_BROADCAST:
+            /*
+
+            1. 수정된 픽셀에 대한 데이터(캐시 버퍼)를 JSON 형식의 문자열로 변환(직렬화)
+            2. 현재 접속중인 모든 클라이언트에게 브로드 캐스팅
+            (아니면 픽셀이 수정될 때마다 브로드 캐스팅 하는 것은 어떤지 고려가 필요하다)
+
+            */
+            break;
         default:
             fprintf(stderr, "Unknown task type: %d\n", task.type);
             break;

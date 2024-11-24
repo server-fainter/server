@@ -6,11 +6,19 @@
 // 작업 큐 크기 정의
 #define QUEUE_SIZE 1024
 
+typedef enum {
+    TASK_NEW_CLIENT,                // 새로운 클라이언트가 접속 요청하는 경우
+    TASK_TEST_RECV_MESSAGE,         // 테스트용 단순한 메세지 버퍼 recv
+    TASK_PIXEL_UPDATE,              // 픽셀 업데이트 작업
+    TASK_SEND_STATIC_FILE,          // 정적 파일(HTML, CSS, JS, 캔버스 파일) send
+    TASK_BROADCAST,                 // 브로드캐스팅(수정된 픽셀 정보)
+}TaskType;
+
 // 작업(Task) 구조체
 typedef struct {
     int fd;   // 작업과 관련된 파일 디스크립터
-    int type; // 작업 유형 (0: Accept, 1: Read, 2: Canvas Update)
-    char data[256]; // 클라이언트로부터 받은 데이터 (예: JSON)
+    TaskType type; // 작업 유형 
+    char data[1024]; // 클라이언트로부터 받은 데이터 (예: JSON)
 } Task;
 
 // 작업 큐(Task Queue) 구조체

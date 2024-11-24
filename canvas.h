@@ -9,6 +9,7 @@
 // 캔버스 배열
 extern int canvas[CANVAS_WIDTH][CANVAS_HEIGHT];
 extern pthread_mutex_t mutex;
+
 // 캔버스 초기화 함수
 void init_canvas();
 

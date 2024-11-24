@@ -35,22 +35,28 @@ int main() {
             continue;
         }
 
-        for (int i = 0; i < num_events; i++) {
-            if (ctx.sm.events[i].data.fd == ctx.sm.server_socket) {
+        for (int i = 0; i < num_events; i++) 
+        {
+            if (ctx.sm.events[i].data.fd == ctx.sm.server_socket) 
+            {
                 // 서버 소켓에서 새로운 클라이언트 연결 처리
-                Task task = {ctx.sm.server_socket, 0, ""};
+                Task task = {ctx.sm.server_socket, TASK_NEW_CLIENT, ""};
                 push_task(&ctx.queue, task);
-            } else {
+
+            } 
+            else 
+            {
                 // 클라이언트 소켓에서 데이터 수신
                 char buffer[BUFFER_SIZE];
                 int client_fd = ctx.sm.events[i].data.fd;
                 int bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
                 if (bytes_read > 0) {
                     buffer[bytes_read] = '\0'; // Null-terminate string
-                    Task task = {client_fd, 2, ""};
+                    Task task = {client_fd, TASK_PIXEL_UPDATE, ""};
                     strncpy(task.data, buffer, sizeof(task.data) - 1);
                     push_task(&ctx.queue, task);
-                } else {
+                } 
+                else {
                     // 클라이언트 연결 종료 처리
                     close(client_fd);
                     printf("Client disconnected: %d\n", client_fd);
