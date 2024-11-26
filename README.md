@@ -25,14 +25,16 @@ sudo apt install libwebsockets-dev pkg-config libcjson-dev
 
 
 ## 파일 구조
+```plaintext
 project/
-├── static/
-│   ├── index.html     # 클라이언트 HTML 파일
-│   ├── script.js      # 클라이언트 JavaScript 파일
-│   └── styles.css     # 클라이언트 CSS 파일
-├── Makefile           # 프로젝트 빌드 파일
-├── README.md          # 프로젝트 설명 파일
-└── server.c           # 서버 구현 코드
+├── static/            # 정적 파일 디렉토리
+│   ├── index.html     # 클라이언트 HTML 파일 (UI 및 구조 정의)
+│   ├── script.js      # 클라이언트 JavaScript 파일 (프론트엔드 로직)
+│   └── styles.css     # 클라이언트 CSS 파일 (스타일 정의)
+├── Makefile           # 프로젝트 빌드 및 실행 설정 파일
+├── README.md          # 프로젝트 설명 및 문서화 파일
+└── server.c           # 서버 구현 코드 (정적 파일 제공 및 WebSocket 서버)
+```
 
 
 ## 실행 방법
