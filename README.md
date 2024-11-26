@@ -1,5 +1,5 @@
 1. libwebsocket 설치 :
-  sudo apt update
+  sudo apt update  
   sudo apt install libwebsockets-dev
 
 2. make
