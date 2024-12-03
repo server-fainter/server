@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced r/place</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+        canvas {
+            border: 2px solid #333;
+            cursor: pointer;
+        }
+        #colorPicker {
+            margin-top: 10px;
+        }
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Enhanced r/place</h1>
+    <p>Click on the canvas to update a pixel. Choose a color using the picker below.</p>
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <input type="color" id="colorPicker" value="#FF5733">
+    <div id="status" style="color: red;">Status: Disconnected</div>
+    <script>
+        const CANVAS_WIDTH = 100;
+        const CANVAS_HEIGHT = 100;
+        const PIXEL_SIZE = 5;
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const statusDiv = document.getElementById('status');
+
+        let ws;
+
+        // WebSocket 연결 설정
+        const connectWebSocket = () => {
+            ws = new WebSocket('ws://127.0.0.1:8081');
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                statusDiv.textContent = 'Status: Connected';
+                statusDiv.style.color = 'green';
+            };
+
+            ws.onmessage = (event) => {
+                console.log('Received from server:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.canvas) {
+                        // 전체 캔버스 렌더링
+                        drawCanvas(data.canvas);
+                    } else if (data.x !== undefined && data.y !== undefined && data.color) {
+                        // 특정 픽셀 업데이트
+                        ctx.fillStyle = data.color;
+                        ctx.fillRect(data.x * PIXEL_SIZE, data.y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+                    }
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                statusDiv.textContent = 'Status: Error';
+                statusDiv.style.color = 'red';
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                statusDiv.textContent = 'Status: Disconnected';
+                statusDiv.style.color = 'red';
+                setTimeout(connectWebSocket, 3000);
+            };
+        };
+
+        // 캔버스 초기화
+        const initCanvas = () => {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        };
+
+        // 전체 캔버스 렌더링
+        const drawCanvas = (canvasData) => {
+            for (let y = 0; y < CANVAS_HEIGHT; y++) {
+                for (let x = 0; x < CANVAS_WIDTH; x++) {
+                    ctx.fillStyle = canvasData[y][x];
+                    ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+                }
+            }
+        };
+
+        // 캔버스 클릭 이벤트 처리
+        canvas.addEventListener('click', (event) => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                alert('WebSocket is not connected. Please wait...');
+                return;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) / PIXEL_SIZE);
+            const y = Math.floor((event.clientY - rect.top) / PIXEL_SIZE);
+            const color = colorPicker.value;
+
+            const message = JSON.stringify({ x, y, color });
+            console.log('Message to send:', message);
+            ws.send(message);
+        });
+
+        // 초기화
+        const init = () => {
+            initCanvas();
+            connectWebSocket();
+        };
+
+        init();
+    </script>
+</body>
+</html>
