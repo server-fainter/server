@@ -1,4 +1,5 @@
-#include "init_server.h"
+#include "server.h"
+#include "clientmanager.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,141 +9,119 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-int client_fds[MAX_CLIENTS];  // 클라이언트 파일 기술자 배열
-int num_clients = 0;          // 현재 클라이언트 수
-
-// 클라이언트 파일 기술자 추가
-void add_client(int client_fd) {
-    if (num_clients < MAX_CLIENTS) {
-        client_fds[num_clients++] = client_fd;
+// 파일 디스크립터를 non-blocking 모드로 설정하는 함수
+// 이 함수는 유틸리티 기능을 수행해서 별도의 공용 파일 (예: utils.c)로 분리할 필요가 있음 아님말고
+int set_nonblocking(int fd) {
+    // 현재 파일 디스크립터 플래그 가져오기
+    int flags = fcntl(fd, F_GETFL, 0); 
+    if (flags == -1) {
+        perror("fcntl F_GETFL");
+        return -1;
     }
+
+    // non-blocking 플래그 추가
+    flags |= O_NONBLOCK;  
+    if (fcntl(fd, F_SETFL, flags) == -1) {
+        perror("fcntl F_SETFL");
+        return -1;
+    }
+
+    return 0;
 }
 
-// 클라이언트 파일 기술자 제거
-void remove_client(int client_fd) {
-    for (int i = 0; i < num_clients; i++) {
-        if (client_fds[i] == client_fd) {
-            client_fds[i] = client_fds[--num_clients];
-            break;
-        }
-    }
-}
-
-// 새로운 클라이언트를 ACCPET 하는 함수
-int accept_new_cleint(int server_fd, int epoll_fd, struct epoll_event *event)
+// 서버 초기화 함수
+void init_server(ServerManager *sm)
 {
-    // 새로운 클라이언트 연결 수락
+    // 서버 소켓 생성
+    sm->server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (sm->server_socket == -1) {
+        perror("socket failed");
+        exit(EXIT_FAILURE); // 실패 시 프로그램 종료
+    }
+
+    // 서버 소켓을 non-blocking 모드로 설정
+    if (set_nonblocking(sm->server_socket) == -1) {
+        perror("set_nonblocking failed");
+        close(sm->server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // 서버 주소 정보 설정
+    struct sockaddr_in server_addr;
+    memset((char*)&server_addr, '\0', sizeof(server_addr)); 
+    server_addr.sin_family = AF_INET;                     
+    server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");    
+    server_addr.sin_port = htons(PORT);                    
+
+    // 소켓과 주소 바인딩
+    if (bind(sm->server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind failed");
+        close(sm->server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // 리슨 모드로 설정
+    if (listen(sm->server_socket, MAX_CLIENTS) == -1) {
+        perror("listen failed");
+        close(sm->server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // epoll 인스턴스 생성
+    sm->epoll_fd = epoll_create1(0); 
+    if (sm->epoll_fd == -1) {
+        perror("epoll_create1 failed");
+        close(sm->server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // 서버 소켓을 epoll 이벤트에 등록
+    sm->ev.events = EPOLLIN | EPOLLET; // 읽기 가능, 엣지 트리거 모드
+    sm->ev.data.fd = sm->server_socket;
+    if (epoll_ctl(sm->epoll_fd, EPOLL_CTL_ADD, sm->server_socket, &sm->ev) == -1) {
+        perror("epoll_ctl: server_socket");
+        close(sm->server_socket);
+        close(sm->epoll_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Success Init Server!\nServer is listening on port %d\n", PORT);
+}
+
+// 서버 종료 함수
+void close_server(ServerManager *sm){
+    close(sm->server_socket);
+    close(sm->epoll_fd);
+}
+
+// 새로운 클라이언트를 ACCEPT하는 함수
+int accept_new_client(ServerManager *sm)
+{
+    // 클라이언트 연결 수락
     struct sockaddr_in client_addr;
-    int client_addr_len = sizeof(client_addr);
-    int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_addr_len);
-    if (client_fd == -1) {
+    socklen_t client_addr_len = sizeof(client_addr);
+    int client_socket = accept(sm->server_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+
+    if (client_socket == -1) {
         perror("accept failed");
         return -1;
     }
 
     // 클라이언트를 non-blocking 모드로 설정
-    if (set_nonblocking(client_fd) == -1) {
-        close(client_fd);
+    if (set_nonblocking(client_socket) == -1) {
+        close(client_socket);
         return -1;
     }
 
-    // 새 클라이언트를 epoll 이벤트에 추가
-    event->events = EPOLLIN | EPOLLET;
-    event->data.fd = client_fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_fd, event) == -1) {
-        perror("epoll_ctl: client_fd");
-        close(client_fd);
-        return -1;
+    // 클라이언트를 epoll 이벤트에 등록
+    sm->ev.events = EPOLLIN | EPOLLET; 
+    sm->ev.data.fd = client_socket;
+    if (epoll_ctl(sm->epoll_fd, EPOLL_CTL_ADD, client_socket, &sm->ev) == -1) {
+        perror("epoll_ctl add client failed");
+        close(client_socket);
     }
 
-    printf("Accepted new client: %d\n", client_fd);
-    return client_fd;       
-}   
-
-int main() {
-
-    int server_fd = init_server();
-    int epoll_fd;
-    if(server_fd == -1)
-    {
-        perror("Failed Server Init");
-        exit(EXIT_FAILURE);
-    }
-    
-    printf("server_fd : %d\n", server_fd);
-
-    // epoll 인스턴스 생성
-    epoll_fd = epoll_create1(0);
-    if (epoll_fd == -1) {
-        perror("epoll_create1 failed");
-        close(server_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // 서버 소켓을 epoll 이벤트에 추가
-    struct epoll_event event;
-    event.events = EPOLLIN;
-    event.data.fd = server_fd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_fd, &event) == -1) {
-        perror("epoll_ctl: server_fd");
-        close(server_fd);
-        close(epoll_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // epoll_wait가 감지한 이벤트들을 저장하기 위한 배열
-    struct epoll_event events[MAX_EVENTS];
-    printf("Success Init Server!\nServer is listening on port %d\n", PORT);
-
-    // epoll을 통해 이벤트 감지 및 처리
-    while (1) {
-        int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-        if (num_events == -1) {
-            perror("epoll_wait failed");
-            break;
-        }
-
-        for (int i = 0; i < num_events; i++) {
-            if (events[i].data.fd == server_fd) {
-
-                // 새로운 클라이언트 연결 수락
-                int client_fd = accept_new_cleint(server_fd, epoll_fd, &event);
-                add_client(client_fd);
-            } 
-            else {
-                // 기존 클라이언트로부터 데이터 수신
-                int client_fd = events[i].data.fd;
-                char buffer[BUFFER_SIZE];
-                int bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
-
-                if (bytes_read == -1) {
-                    if (errno != EAGAIN) {
-                        perror("read failed");
-                        close(client_fd);
-                    }
-                    continue;
-                } 
-                else if (bytes_read == 0) {
-                    // 클라이언트가 연결을 종료함
-                    printf("Client %d disconnected\n", client_fd);
-                    close(client_fd);
-                    continue;
-                }
-
-                buffer[bytes_read] = '\0';
-                printf("Received from client %d: %s\n", client_fd, buffer);
-
-                // 클라이언트에게 동일한 데이터 반환
-                if (write(client_fd, buffer, bytes_read) == -1) {
-                    perror("write failed");
-                    close(client_fd);
-                }
-            }
-        }
-    }
-
-    // 리소스 해제
-    close(server_fd);
-    close(epoll_fd);
+    // 클라이언트 연결 성공 메시지 출력
+    printf("Accepted new client: %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port)); 
     return 0;
 }
